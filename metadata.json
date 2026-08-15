@@ -1,0 +1,6 @@
+{
+  "name": "Deriv Adaptive Synthetic Indices Trading Engine",
+  "description": "Real-time Deriv WebSocket trading platform for synthetic indices with adaptive signal funnel, strict risk separation, explicit penalties, AutoTuner, contradiction detector, and telemetry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
