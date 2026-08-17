@@ -763,7 +763,7 @@
 
     // === Sistema de Pesos Cuantitativo de 6 Indicadores (30s - 3min) ===
     function calculateWeightedSignal(candlesList) {
-      if (!candlesList || candlesList.length < 30) {
+      if (!candlesList || candlesList.length < 20) {
         return { buyConfidence: 0, sellConfidence: 0, rsi: 50, stochK: 50, stochD: 50, hist: 0, atr: 0 };
       }
       const closes = candlesList.map(c => c.close);
@@ -773,9 +773,9 @@
       const rsiValue = rsi(closes, 14).at(-1) || 50;
       let rsiScore = 0;
       if (rsiValue < 35) rsiScore = 25;
+      else if (rsiValue < 48) rsiScore = 15;
       else if (rsiValue > 65) rsiScore = -25;
-      else if (rsiValue < 45) rsiScore = 10;
-      else if (rsiValue > 55) rsiScore = -10;
+      else if (rsiValue > 52) rsiScore = -15;
 
       // 2. Estocástico (Peso: 20%)
       const stoch = stochastic(candlesList, 14, 3, 3);
@@ -783,9 +783,9 @@
       const stochD = stoch.d.at(-1) || 50;
       let stochScore = 0;
       if (stochK < 25 && stochK > stochD) stochScore = 20;
+      else if (stochK < 45 || stochK > stochD) stochScore = 12;
       else if (stochK > 75 && stochK < stochD) stochScore = -20;
-      else if (stochK < 40) stochScore = 8;
-      else if (stochK > 60) stochScore = -8;
+      else if (stochK > 55 || stochK < stochD) stochScore = -12;
 
       // 3. MACD Histograma (Peso: 20%)
       const { hist } = macd(closes, 12, 26, 9);
@@ -793,9 +793,9 @@
       const histPrev = hist.at(-2) || 0;
       let macdScore = 0;
       if (histLast > 0 && histLast > histPrev) macdScore = 20;
+      else if (histLast > 0) macdScore = 12;
       else if (histLast < 0 && histLast < histPrev) macdScore = -20;
-      else if (histLast > 0) macdScore = 10;
-      else if (histLast < 0) macdScore = -10;
+      else if (histLast < 0) macdScore = -12;
 
       // 4. Bandas de Bollinger (Peso: 15%)
       const bb = bollinger(closes, 20, 2);
@@ -803,9 +803,9 @@
       const bbLower = bb.lower.at(-1) || lastClose;
       let bbScore = 0;
       if (lastClose < bbLower) bbScore = 15;
+      else if (lastClose < bbLower * 1.005) bbScore = 8;
       else if (lastClose > bbUpper) bbScore = -15;
-      else if (lastClose < bbLower * 1.01) bbScore = 7;
-      else if (lastClose > bbUpper * 0.99) bbScore = -7;
+      else if (lastClose > bbUpper * 0.995) bbScore = -8;
 
       // 5. EMA 9/21 Cruce (Peso: 10%)
       const ema9 = ema(closes, 9).at(-1) || lastClose;
@@ -818,17 +818,16 @@
       const atr = calculateATR(candlesList, 14);
       const avgPrice = closes.slice(-14).reduce((a, b) => a + b, 0) / 14 || lastClose;
       const volatility = (atr / avgPrice) * 100;
-      let volScore = 0;
-      if (volatility > 1.5) volScore = 10;
-      else if (volatility < 0.5) volScore = -5;
-      else volScore = 5;
+      let volScore = 5;
+      if (volatility > 1.0) volScore = 10;
+      else if (volatility < 0.3) volScore = 0;
 
       // CÁLCULO FINAL Y NORMALIZACIÓN (0-100%)
       const totalBuyScore = rsiScore + stochScore + macdScore + bbScore + emaScore + volScore;
       const totalSellScore = -totalBuyScore;
 
-      const normalizedBuy = Math.min(100, Math.max(0, (totalBuyScore / 100) * 100));
-      const normalizedSell = Math.min(100, Math.max(0, (totalSellScore / 100) * 100));
+      const normalizedBuy = Math.min(100, Math.max(0, 50 + totalBuyScore));
+      const normalizedSell = Math.min(100, Math.max(0, 50 + totalSellScore));
 
       return {
         buyConfidence: Math.round(normalizedBuy),
@@ -844,17 +843,17 @@
 
     function getTradingDecision(signal) {
       const { buyConfidence, sellConfidence } = signal;
-      const threshold = 65; // Umbral mínimo para operar (65%)
+      const threshold = 52; // Umbral práctico para activar 2 de 3 condiciones
 
       let action = 'Neutral';
       let confidence = Math.max(buyConfidence, sellConfidence);
       let reason = '';
 
-      if (buyConfidence >= threshold && buyConfidence > sellConfidence + 15) {
+      if (buyConfidence >= threshold && buyConfidence > sellConfidence) {
         action = 'Compra';
         confidence = buyConfidence;
         reason = `RSI:${signal.rsi.toFixed(1)} Stoch:${signal.stochK.toFixed(1)} MACD:${signal.hist.toFixed(4)}`;
-      } else if (sellConfidence >= threshold && sellConfidence > buyConfidence + 15) {
+      } else if (sellConfidence >= threshold && sellConfidence > buyConfidence) {
         action = 'Venta';
         confidence = sellConfidence;
         reason = `RSI:${signal.rsi.toFixed(1)} Stoch:${signal.stochK.toFixed(1)} MACD:${signal.hist.toFixed(4)}`;
@@ -1525,6 +1524,19 @@
         strength = Math.round(100 * Math.max(buyConditionsMet, sellConditionsMet) / 3);
         if (strength > 100) strength = 100;
 
+        const totalBuy = side === "Compra" ? strength : (side === "Venta" ? 100 - strength : 50);
+        const totalSell = side === "Venta" ? strength : (side === "Compra" ? 100 - strength : 50);
+
+        if (elBuyScoreText) elBuyScoreText.textContent = `${totalBuy}%`;
+        if (elSellScoreText) elSellScoreText.textContent = `${totalSell}%`;
+        if (elBuyScoreBar) elBuyScoreBar.style.width = `${totalBuy}%`;
+        if (elSellScoreBar) elSellScoreBar.style.width = `${totalSell}%`;
+
+        if (chkRsi) chkRsi.innerHTML = (rsiLast < 35 || rsiLast > 65 || stochK < 30 || stochK > 70) ? '<span class="text-emerald-400">✅</span> Oscilador' : '<span class="text-rose-400">❌</span> Oscilador';
+        if (chkDiv) chkDiv.innerHTML = (consecutiveUp >= 2 || consecutiveDown >= 2) ? '<span class="text-emerald-400">✅</span> Momentum' : '<span class="text-rose-400">❌</span> Momentum';
+        if (chkCandle) chkCandle.innerHTML = (buyConditionsMet >= 2 || sellConditionsMet >= 2) ? '<span class="text-emerald-400">✅</span> Señal 2/3' : '<span class="text-rose-400">❌</span> Señal 2/3';
+        if (chkTrend) chkTrend.innerHTML = (buyConditionsMet >= 2 || sellConditionsMet >= 2) ? '<span class="text-emerald-400">✅</span> Confirmado' : '<span class="text-rose-400">❌</span> Confirmado';
+
       } else {
         // --- Estrategia para Velas de MINUTOS/SEGUNDOS ---
         const rsiP = +elRsiP?.value || (isSpecialIndicatorActive ? 5 : 14);
@@ -1544,7 +1556,7 @@
         macdDisplayVal = [macdLast, macdSigLast, histLast].map((v) => (isFinite(v) ? v.toFixed(5) : "—")).join(" | ");
 
         const emaTrendArr = ema(closes, trP);
-        const emaTrend = emaTrendArr.at(-1) ?? lastClose;
+        var emaTrend = emaTrendArr.at(-1) ?? lastClose;
 
         const emaFastArr = ema(closes, 9);
         const emaSlowArr = ema(closes, 21);
@@ -1555,7 +1567,7 @@
         const bbUpper = bb.upper.at(-1) ?? lastClose;
         const bbLower = bb.lower.at(-1) ?? lastClose;
 
-        const trendUp = lastClose > emaTrend;
+        var trendUp = lastClose > emaTrend;
         trendLabel = `${trendUp ? "Alcista" : "Bajista"} (EMA ${trP}: ${emaTrend.toFixed(5)})`;
 
         const atrVal = calculateATR(candles, 14);
@@ -1622,7 +1634,7 @@
             if (elBuyScoreBar) elBuyScoreBar.style.width = `${totalBuy}%`;
             if (elSellScoreBar) elSellScoreBar.style.width = `${totalSell}%`;
 
-            const rsiExtrem = weightedSig.rsi < 35 || weightedSig.rsi > 65;
+            const rsiExtrem = weightedSig.rsi < 40 || weightedSig.rsi > 60;
             const rsiArrAll = rsi(closes, 14);
             const div = detectDivergence(candles, rsiArrAll);
             const candlePattern = checkCandlePattern(candles);
@@ -1711,12 +1723,16 @@
         
         let emaConditionMet = true;
         if (elStrategyType.value === "rise_fall" && !isSpecialIndicatorActive) {
-            if (side === "Compra") {
-                emaConditionMet = trendUp;
-                if (!emaConditionMet) log("Filtro EMA: Señal de Compra retenida (cotizando debajo de EMA de tendencia).");
-            } else if (side === "Venta") {
-                emaConditionMet = !trendUp;
-                if (!emaConditionMet) log("Filtro EMA: Señal de Venta retenida (cotizando encima de EMA de tendencia).");
+            if (durUnit === "t") {
+                emaConditionMet = (side === "Compra" || side === "Venta");
+            } else {
+                if (side === "Compra") {
+                    emaConditionMet = typeof trendUp !== "undefined" ? trendUp : true;
+                    if (!emaConditionMet) log("Filtro EMA: Señal de Compra retenida (cotizando debajo de EMA de tendencia).");
+                } else if (side === "Venta") {
+                    emaConditionMet = typeof trendUp !== "undefined" ? !trendUp : true;
+                    if (!emaConditionMet) log("Filtro EMA: Señal de Venta retenida (cotizando encima de EMA de tendencia).");
+                }
             }
         }
         
