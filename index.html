@@ -1505,54 +1505,85 @@
       let trendLabel = "—";
 
       if (strategyType === "over_under_digit") {
-        // --- ESTRATEGIA ESPECIALIZADA: DÍGITOS UNDER 9 (1 TICK) ---
+        // --- ESTRATEGIA DUAL DE DÍGITOS EXTREMOS: OVER 0 & UNDER 9 (1 TICK) ---
         const currentDigit = recentDigits.at(-1) ?? 0;
         const ninesCount = recentDigits.filter(d => d === 9).length;
-        const ninesFreq = Math.round((ninesCount / (recentDigits.length || 1)) * 100);
+        const zerosCount = recentDigits.filter(d => d === 0).length;
+        const totalSample = recentDigits.length || 1;
+        const ninesFreq = Math.round((ninesCount / totalSample) * 100);
+        const zerosFreq = Math.round((zerosCount / totalSample) * 100);
 
-        // Distancia desde el último 9
+        // Distancia desde el último 9 y último 0
         const lastNineIdx = recentDigits.lastIndexOf(9);
+        const lastZeroIdx = recentDigits.lastIndexOf(0);
         const distFromNine = lastNineIdx === -1 ? recentDigits.length : (recentDigits.length - 1 - lastNineIdx);
+        const distFromZero = lastZeroIdx === -1 ? recentDigits.length : (recentDigits.length - 1 - lastZeroIdx);
 
-        // Cálculo Cuantitativo de Confianza para Under 9 (Base Teórica: 90%)
+        // Confianza individual para cada extremo (Base teórica: 90%)
+        let over0Confidence = 90;
         let under9Confidence = 90;
 
-        if (distFromNine === 0) {
-          // El último tick fue 9: Gatillo Sniper inmediato (repetición 9-9 es improbable, ~1%)
-          under9Confidence = 96;
-        } else if (distFromNine === 1) {
-          under9Confidence = 94;
-        } else if (distFromNine >= 2 && distFromNine <= 6) {
-          under9Confidence = 90;
-        } else if (distFromNine >= 7 && distFromNine <= 12) {
-          under9Confidence = 84;
+        // Gatillos Sniper Inmediatos (Post-Extremo)
+        if (distFromZero === 0) over0Confidence = 96;
+        else if (distFromZero === 1) over0Confidence = 94;
+        else if (distFromZero >= 2 && distFromZero <= 6) over0Confidence = 90;
+        else if (distFromZero >= 7 && distFromZero <= 12) over0Confidence = 84;
+        else over0Confidence = 76;
+
+        if (distFromNine === 0) under9Confidence = 96;
+        else if (distFromNine === 1) under9Confidence = 94;
+        else if (distFromNine >= 2 && distFromNine <= 6) under9Confidence = 90;
+        else if (distFromNine >= 7 && distFromNine <= 12) under9Confidence = 84;
+        else under9Confidence = 76;
+
+        // Regla: Si hay muchos 9s saliendo -> Over 0 (el 0 está ausente / baja probabilidad de 0)
+        // Regla: Si hay muchos 0s saliendo -> Under 9 (el 9 está ausente / baja probabilidad de 9)
+        if (ninesCount > zerosCount && ninesCount >= 2) {
+          over0Confidence += 4;
+          under9Confidence -= 4;
+        } else if (zerosCount > ninesCount && zerosCount >= 2) {
+          under9Confidence += 4;
+          over0Confidence -= 4;
+        }
+
+        // Selección de Dirección Dominante y Barrera
+        let selectedBarrier = 9;
+        if (distFromZero <= 1 && distFromNine > 1) {
+          side = "Over";
+          strength = over0Confidence;
+          selectedBarrier = 0;
+        } else if (distFromNine <= 1 && distFromZero > 1) {
+          side = "Under";
+          strength = under9Confidence;
+          selectedBarrier = 9;
+        } else if (over0Confidence >= under9Confidence) {
+          side = "Over";
+          strength = over0Confidence;
+          selectedBarrier = 0;
         } else {
-          under9Confidence = 76;
+          side = "Under";
+          strength = under9Confidence;
+          selectedBarrier = 9;
         }
 
-        if (ninesCount >= 3) {
-          under9Confidence = Math.max(65, under9Confidence - 6);
-        }
+        if (elDigitBarrier) elDigitBarrier.value = selectedBarrier;
 
-        side = "Under";
-        strength = under9Confidence;
+        rsiDisplayVal = strength;
+        macdDisplayVal = `Último: ${currentDigit} | 0s: ${zerosCount}(${zerosFreq}%) | 9s: ${ninesCount}(${ninesFreq}%)`;
+        trendLabel = `Dígitos: [${recentDigits.slice(-10).join(', ')}] | D(0):${distFromZero}t D(9):${distFromNine}t`;
 
-        rsiDisplayVal = under9Confidence;
-        macdDisplayVal = `Último: ${currentDigit} | 9s en 20t: ${ninesCount} (${ninesFreq}%)`;
-        trendLabel = `Dígitos: [${recentDigits.slice(-10).join(', ')}] | Dist 9: ${distFromNine}t`;
+        const totalOver0 = over0Confidence;
+        const totalUnder9 = under9Confidence;
 
-        const totalBuy = 100 - under9Confidence;
-        const totalSell = under9Confidence;
+        if (elBuyScoreText) elBuyScoreText.textContent = `${totalOver0}% (Over 0)`;
+        if (elSellScoreText) elSellScoreText.textContent = `${totalUnder9}% (Under 9)`;
+        if (elBuyScoreBar) elBuyScoreBar.style.width = `${totalOver0}%`;
+        if (elSellScoreBar) elSellScoreBar.style.width = `${totalUnder9}%`;
 
-        if (elBuyScoreText) elBuyScoreText.textContent = `${totalBuy}% (Over 9)`;
-        if (elSellScoreText) elSellScoreText.textContent = `${totalSell}% (Under 9)`;
-        if (elBuyScoreBar) elBuyScoreBar.style.width = `${totalBuy}%`;
-        if (elSellScoreBar) elSellScoreBar.style.width = `${totalSell}%`;
-
-        if (chkRsi) chkRsi.innerHTML = (distFromNine <= 1) ? '<span class="text-emerald-400">🎯</span> Gatillo 9 Activo' : '<span class="text-gray-400">⏱</span> Dist 9: ' + distFromNine + ' t';
-        if (chkDiv) chkDiv.innerHTML = '<span class="text-emerald-400">📊</span> 9s (20t): ' + ninesCount + ' (' + ninesFreq + '%)';
-        if (chkCandle) chkCandle.innerHTML = '<span class="text-emerald-400">⚡</span> Contrato: Under 9 (1 Tick)';
-        if (chkTrend) chkTrend.innerHTML = (under9Confidence >= 85) ? '<span class="text-emerald-400">✅</span> Alta Confianza Under' : '<span class="text-amber-400">⚠️</span> Confianza ' + under9Confidence + '%';
+        if (chkRsi) chkRsi.innerHTML = (side === "Over" && distFromZero <= 1) ? '<span class="text-emerald-400">🎯</span> Gatillo Over 0 (Post-0)' : ((side === "Under" && distFromNine <= 1) ? '<span class="text-emerald-400">🎯</span> Gatillo Under 9 (Post-9)' : `<span class="text-gray-400">⏱</span> D(0):${distFromZero}t D(9):${distFromNine}t`);
+        if (chkDiv) chkDiv.innerHTML = ninesCount > zerosCount ? '<span class="text-emerald-400">🔥</span> Muchos 9s -> Favorece Over 0' : (zerosCount > ninesCount ? '<span class="text-emerald-400">🔥</span> Muchos 0s -> Favorece Under 9' : '<span class="text-indigo-400">📊</span> Extremos Balanceados');
+        if (chkCandle) chkCandle.innerHTML = `<span class="text-emerald-400">⚡</span> Contrato: ${side} ${selectedBarrier} (1 Tick)`;
+        if (chkTrend) chkTrend.innerHTML = (strength >= 85) ? `<span class="text-emerald-400">✅</span> Alta Confianza ${side} ${selectedBarrier}` : `<span class="text-amber-400">⚠️</span> Confianza ${strength}%`;
 
       } else if (durUnit === "t") {
         // --- Estrategia para TICKS (Ultra Corto Plazo) ---
@@ -1853,11 +1884,13 @@
       }
       const proposalReq = { proposal: 1, amount, basis: "stake", contract_type, currency, duration, duration_unit, underlying_symbol: symbol };
       if (elStrategyType.value === "over_under_digit") {
-        let barrier = Number(elDigitBarrier?.value);
-        if (!isFinite(barrier) || barrier < 0 || barrier > 9) {
-          barrier = 9;
-          if (elDigitBarrier) elDigitBarrier.value = 9;
+        let barrier = contract_type === "DIGITOVER" ? 0 : 9;
+        if (elDigitBarrier && Number(elDigitBarrier.value) >= 0 && Number(elDigitBarrier.value) <= 9) {
+          barrier = Number(elDigitBarrier.value);
         }
+        if (contract_type === "DIGITOVER" && barrier > 8) barrier = 0;
+        if (contract_type === "DIGITUNDER" && barrier < 1) barrier = 9;
+        if (elDigitBarrier) elDigitBarrier.value = barrier;
         proposalReq.barrier = barrier;
       }
       ws.send(JSON.stringify(proposalReq));
@@ -2272,12 +2305,11 @@
       const strategy = e.target.value;
       if (strategy === "over_under_digit") {
         elOverUnderParams.classList.remove("hidden");
-        elDigitBarrier.value = 9;
-        btnBuyRiseOver.textContent = "Comprar Over 9";
+        btnBuyRiseOver.textContent = "Comprar Over 0 (1 Tick)";
         btnBuyFallUnder.textContent = "Comprar Under 9 (1 Tick)";
         elDurUnit.value = "t";
         elDuration.value = 1;
-        log("Estrategia Dígitos Under 9 activada. Parámetros fijados: 1 Tick, Barrera 9.");
+        log("Estrategia Dual Dígitos (Over 0 / Under 9) activada. Parámetros fijados: 1 Tick.");
       } else {
         elOverUnderParams.classList.add("hidden");
         btnBuyRiseOver.textContent = "Comprar Rise";
