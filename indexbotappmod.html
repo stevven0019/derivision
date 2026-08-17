@@ -1707,17 +1707,80 @@
 
         if (strategyType === "rise_fall") {
           if (isSpecialIndicatorActive) {
-            // Scalping Intenso (Intacto)
-            let buyConditionsMet = 0;
-            let sellConditionsMet = 0;
-            if (histLast > 0 && rsiLast > 55) buyConditionsMet = 4; else buyConditionsMet = 0;
-            if (histLast < 0 && rsiLast < 45) sellConditionsMet = 4; else sellConditionsMet = 0;
+            // --- SCALPING INTENSO: PATRONES DE TICKS & EMA 21 ---
+            const ema21Arr = ema(closes, 21);
+            const ema21 = ema21Arr.at(-1) ?? lastClose;
+            const isAboveEma21 = lastClose > ema21;
+            const isBelowEma21 = lastClose < ema21;
 
-            if (buyConditionsMet >= 3) side = "Compra";
-            else if (sellConditionsMet >= 3) side = "Venta";
+            // Conteo de ticks consecutivos en la misma dirección
+            let consecutiveUp = 0;
+            let consecutiveDown = 0;
+            if (candles.length >= 4) {
+              for (let i = candles.length - 1; i > 0; i--) {
+                if (candles[i].close > candles[i - 1].close) {
+                  if (consecutiveDown === 0) consecutiveUp++;
+                  else break;
+                } else if (candles[i].close < candles[i - 1].close) {
+                  if (consecutiveUp === 0) consecutiveDown++;
+                  else break;
+                } else {
+                  break;
+                }
+              }
+            }
 
-            strength = Math.round(100 * Math.max(buyConditionsMet, sellConditionsMet) / 4);
-            if (strength > 100) strength = 100;
+            let targetScalpDuration = 5;
+            let scalpPatternName = "Esperando patrón";
+
+            if (consecutiveUp >= 3) {
+              side = "Compra";
+              targetScalpDuration = 6;
+              strength = 90;
+              scalpPatternName = "3 Ticks Alcistas → 6 Ticks";
+            } else if (consecutiveDown >= 3) {
+              side = "Venta";
+              targetScalpDuration = 6;
+              strength = 90;
+              scalpPatternName = "3 Ticks Bajistas → 6 Ticks";
+            } else if (consecutiveUp >= 2 && isAboveEma21) {
+              side = "Compra";
+              targetScalpDuration = 4;
+              strength = 85;
+              scalpPatternName = "2 Ticks Alcistas + EMA21 → 4 Ticks";
+            } else if (consecutiveDown >= 2 && isBelowEma21) {
+              side = "Venta";
+              targetScalpDuration = 4;
+              strength = 85;
+              scalpPatternName = "2 Ticks Bajistas + EMA21 → 4 Ticks";
+            } else {
+              side = "Neutral";
+              strength = 40;
+              targetScalpDuration = +elDuration.value || 5;
+              scalpPatternName = `Neutro (${consecutiveUp} Up / ${consecutiveDown} Down)`;
+            }
+
+            if (elAdaptiveDurationInfo) {
+              elAdaptiveDurationInfo.textContent = `Scalping: ${targetScalpDuration}t (${scalpPatternName})`;
+            }
+
+            if (side !== "Neutral") {
+              elDuration.value = targetScalpDuration;
+              elDurUnit.value = "t";
+            }
+
+            const totalBuy = side === "Compra" ? strength : (side === "Venta" ? 100 - strength : 50);
+            const totalSell = side === "Venta" ? strength : (side === "Compra" ? 100 - strength : 50);
+
+            if (elBuyScoreText) elBuyScoreText.textContent = `${totalBuy}%`;
+            if (elSellScoreText) elSellScoreText.textContent = `${totalSell}%`;
+            if (elBuyScoreBar) elBuyScoreBar.style.width = `${totalBuy}%`;
+            if (elSellScoreBar) elSellScoreBar.style.width = `${totalSell}%`;
+
+            if (chkRsi) chkRsi.innerHTML = (consecutiveUp >= 3 || consecutiveDown >= 3) ? '<span class="text-emerald-400">⚡</span> 3 Ticks (6t)' : ((consecutiveUp >= 2 || consecutiveDown >= 2) ? '<span class="text-emerald-400">⚡</span> 2 Ticks (4t)' : '<span class="text-gray-400">⏱</span> Esperando Ticks');
+            if (chkDiv) chkDiv.innerHTML = `<span class="text-emerald-400">📊</span> Ticks: ${consecutiveUp} Up / ${consecutiveDown} Down`;
+            if (chkCandle) chkCandle.innerHTML = `<span class="text-emerald-400">📈</span> EMA 21: ${ema21.toFixed(5)} (${isAboveEma21 ? 'Arriba' : 'Abajo'})`;
+            if (chkTrend) chkTrend.innerHTML = (side !== "Neutral") ? `<span class="text-emerald-400">🎯</span> ${side} ${targetScalpDuration} Ticks` : '<span class="text-gray-400">⏱</span> Sin señal';
 
           } else {
             // --- Sistema Cuantitativo de 6 Indicadores Ponderados ---
@@ -1790,7 +1853,7 @@
         const cooldown = Number(elCooldownPeriod?.value || "0");
         
         let candleConditionMet = true; 
-        if (elRequireTwoCandles.checked) {
+        if (elRequireTwoCandles.checked && !isSpecialIndicatorActive) {
             candleConditionMet = false; 
             if (candles.length >= 3) { 
                 const lastClosed = candles.at(-2);
@@ -1810,10 +1873,12 @@
             }
         }
         
-        const minStrength = elStrategyType.value === "over_under_digit" ? 75 : 60;
+        const minStrength = elStrategyType.value === "over_under_digit" ? 75 : (isSpecialIndicatorActive ? 80 : 60);
         
         let emaConditionMet = true;
-        if (elStrategyType.value === "rise_fall" && !isSpecialIndicatorActive) {
+        if (isSpecialIndicatorActive) {
+            emaConditionMet = (side === "Compra" || side === "Venta");
+        } else if (elStrategyType.value === "rise_fall") {
             if (durUnit === "t") {
                 emaConditionMet = (side === "Compra" || side === "Venta");
             } else {
@@ -1840,7 +1905,7 @@
           lastAutoTradeTs = now;
           executedAutoTrades++;
           updateStatsUI();
-          log(`[Auto-Trade ${executedAutoTrades}/${maxAutoTrades}] Orden ${type} enviada (Confianza ${strength}%).`);
+          log(`[Auto-Trade ${executedAutoTrades}/${maxAutoTrades}] Orden ${type} enviada (${isSpecialIndicatorActive ? 'Scalping Intenso ' + elDuration.value + 't' : 'Confianza ' + strength + '%'}).`);
         }
       }
     }
