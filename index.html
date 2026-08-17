@@ -1425,11 +1425,11 @@
 
       } else {
         // --- Estrategia para Velas de MINUTOS/SEGUNDOS ---
-        const rsiP = isSpecialIndicatorActive ? 5 : (+elRsiP?.value || 14);
-        const mf = isSpecialIndicatorActive ? 5 : (+elMacdF?.value || 12);
-        const ms = isSpecialIndicatorActive ? 10 : (+elMacdS?.value || 26);
-        const mSig = isSpecialIndicatorActive ? 3 : (+elMacdSig?.value || 9);
-        const trP = isSpecialIndicatorActive ? 50 : (+elTrend?.value || 200);
+        const rsiP = +elRsiP?.value || (isSpecialIndicatorActive ? 5 : 14);
+        const mf = +elMacdF?.value || (isSpecialIndicatorActive ? 5 : 12);
+        const ms = +elMacdS?.value || (isSpecialIndicatorActive ? 13 : 26);
+        const mSig = +elMacdSig?.value || (isSpecialIndicatorActive ? 4 : 9);
+        const trP = +elTrend?.value || (isSpecialIndicatorActive ? 50 : 200);
 
         const rsiArr = rsi(closes, rsiP);
         const rsiLast = rsiArr.at(-1) ?? 50;
@@ -2084,22 +2084,22 @@
                 cooldown_period: elCooldownPeriod.value
             };
             
-            elRsiP.value = 7;
-            elMacdF.value = 3;
-            elMacdS.value = 10;
-            elMacdSig.value = 2;
+            elRsiP.value = 5;
+            elMacdF.value = 5;
+            elMacdS.value = 13;
+            elMacdSig.value = 4;
             elTrend.value = 50;
             elDuration.value = 5;
             elDurUnit.value = "t";
             elCooldownPeriod.value = 2;
             
-            inputsToToggle.forEach(input => { if (input) input.disabled = true; });
+            inputsToToggle.forEach(input => { if (input) input.disabled = false; });
             
-            btnSpecialIndicator.textContent = "⚡ Scalping Intenso: ACTIVO";
+            btnSpecialIndicator.textContent = "⚡ Scalping Intenso: ACTIVO (Configurable)";
             btnSpecialIndicator.className = "w-full bg-gradient-to-r from-red-600 to-orange-500 hover:from-red-500 hover:to-orange-400 text-white font-bold py-2 px-4 rounded-xl text-xs shadow-lg shadow-red-950/30 transition-all duration-300 transform scale-[1.01] animate-pulse";
             
-            log("⚡ Modo Scalping Intenso activado. Configurando RSI(7), MACD(3,10,2), EMA(50) y 5 Ticks.");
-            showMessage("Scalping Intenso Activado", "info");
+            log("⚡ Modo Scalping Intenso activado. Configuración cargada: RSI(5), MACD(5,13,4), EMA(50) y 5 Ticks (Configurables).");
+            showMessage("Scalping Intenso Activado (Parámetros Configurables)", "info");
         } else {
             if (originalParams) {
                 elRsiP.value = originalParams.rsi_period;
