@@ -364,7 +364,7 @@
             <div class="bg-black/35 p-3 rounded-xl border border-white/5 space-y-2">
               <label class="flex items-center space-x-2.5 text-xs text-gray-300 cursor-pointer">
                 <input type="checkbox" id="auto_trade" class="rounded bg-black/45 border-white/10 text-indigo-600 focus:ring-indigo-500/30 w-4 h-4"/>
-                <span class="font-medium">Auto ejecutar (Señal 3/3)</span>
+                <span class="font-medium">Auto ejecutar (Señal 2/3 + EMA)</span>
               </label>
               <label class="flex items-center space-x-2.5 text-xs text-gray-300 cursor-pointer">
                 <input type="checkbox" id="require_two_candles" class="rounded bg-black/45 border-white/10 text-indigo-600 focus:ring-indigo-500/30 w-4 h-4"/>
@@ -1707,9 +1707,20 @@
             }
         }
         
-        const minStrength = elStrategyType.value === "over_under_digit" ? 100 : 75;
+        const minStrength = elStrategyType.value === "over_under_digit" ? 100 : 60;
         
-        if (now - lastAutoTradeTs >= cooldown && (side === "Compra" || side === "Venta" || side === "Over" || side === "Under") && strength >= minStrength && candleConditionMet) { 
+        let emaConditionMet = true;
+        if (elStrategyType.value === "rise_fall" && !isSpecialIndicatorActive) {
+            if (side === "Compra") {
+                emaConditionMet = trendUp;
+                if (!emaConditionMet) log("Filtro EMA: Señal de Compra retenida (cotizando debajo de EMA de tendencia).");
+            } else if (side === "Venta") {
+                emaConditionMet = !trendUp;
+                if (!emaConditionMet) log("Filtro EMA: Señal de Venta retenida (cotizando encima de EMA de tendencia).");
+            }
+        }
+        
+        if (now - lastAutoTradeTs >= cooldown && (side === "Compra" || side === "Venta" || side === "Over" || side === "Under") && strength >= minStrength && candleConditionMet && emaConditionMet) { 
           let type;
           if (side === "Compra") type = "CALL";
           else if (side === "Venta") type = "PUT";
@@ -1720,7 +1731,7 @@
           lastAutoTradeTs = now;
           executedAutoTrades++;
           updateStatsUI();
-          log(`[Auto-Trade ${executedAutoTrades}/${maxAutoTrades}] Orden ${type} enviada.`);
+          log(`[Auto-Trade ${executedAutoTrades}/${maxAutoTrades}] Orden ${type} enviada (Señal ${strength}% + EMA OK).`);
         }
       }
     }
