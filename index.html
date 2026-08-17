@@ -761,6 +761,108 @@
       return null;
     }
 
+    // === Sistema de Pesos Cuantitativo de 6 Indicadores (30s - 3min) ===
+    function calculateWeightedSignal(candlesList) {
+      if (!candlesList || candlesList.length < 30) {
+        return { buyConfidence: 0, sellConfidence: 0, rsi: 50, stochK: 50, stochD: 50, hist: 0, atr: 0 };
+      }
+      const closes = candlesList.map(c => c.close);
+      const lastClose = closes.at(-1);
+
+      // 1. RSI (Peso: 25%)
+      const rsiValue = rsi(closes, 14).at(-1) || 50;
+      let rsiScore = 0;
+      if (rsiValue < 35) rsiScore = 25;
+      else if (rsiValue > 65) rsiScore = -25;
+      else if (rsiValue < 45) rsiScore = 10;
+      else if (rsiValue > 55) rsiScore = -10;
+
+      // 2. Estocástico (Peso: 20%)
+      const stoch = stochastic(candlesList, 14, 3, 3);
+      const stochK = stoch.k.at(-1) || 50;
+      const stochD = stoch.d.at(-1) || 50;
+      let stochScore = 0;
+      if (stochK < 25 && stochK > stochD) stochScore = 20;
+      else if (stochK > 75 && stochK < stochD) stochScore = -20;
+      else if (stochK < 40) stochScore = 8;
+      else if (stochK > 60) stochScore = -8;
+
+      // 3. MACD Histograma (Peso: 20%)
+      const { hist } = macd(closes, 12, 26, 9);
+      const histLast = hist.at(-1) || 0;
+      const histPrev = hist.at(-2) || 0;
+      let macdScore = 0;
+      if (histLast > 0 && histLast > histPrev) macdScore = 20;
+      else if (histLast < 0 && histLast < histPrev) macdScore = -20;
+      else if (histLast > 0) macdScore = 10;
+      else if (histLast < 0) macdScore = -10;
+
+      // 4. Bandas de Bollinger (Peso: 15%)
+      const bb = bollinger(closes, 20, 2);
+      const bbUpper = bb.upper.at(-1) || lastClose;
+      const bbLower = bb.lower.at(-1) || lastClose;
+      let bbScore = 0;
+      if (lastClose < bbLower) bbScore = 15;
+      else if (lastClose > bbUpper) bbScore = -15;
+      else if (lastClose < bbLower * 1.01) bbScore = 7;
+      else if (lastClose > bbUpper * 0.99) bbScore = -7;
+
+      // 5. EMA 9/21 Cruce (Peso: 10%)
+      const ema9 = ema(closes, 9).at(-1) || lastClose;
+      const ema21 = ema(closes, 21).at(-1) || lastClose;
+      let emaScore = 0;
+      if (ema9 > ema21) emaScore = 10;
+      else if (ema9 < ema21) emaScore = -10;
+
+      // 6. Volatilidad ATR (Peso: 10%)
+      const atr = calculateATR(candlesList, 14);
+      const avgPrice = closes.slice(-14).reduce((a, b) => a + b, 0) / 14 || lastClose;
+      const volatility = (atr / avgPrice) * 100;
+      let volScore = 0;
+      if (volatility > 1.5) volScore = 10;
+      else if (volatility < 0.5) volScore = -5;
+      else volScore = 5;
+
+      // CÁLCULO FINAL Y NORMALIZACIÓN (0-100%)
+      const totalBuyScore = rsiScore + stochScore + macdScore + bbScore + emaScore + volScore;
+      const totalSellScore = -totalBuyScore;
+
+      const normalizedBuy = Math.min(100, Math.max(0, (totalBuyScore / 100) * 100));
+      const normalizedSell = Math.min(100, Math.max(0, (totalSellScore / 100) * 100));
+
+      return {
+        buyConfidence: Math.round(normalizedBuy),
+        sellConfidence: Math.round(normalizedSell),
+        rsi: rsiValue,
+        stochK,
+        stochD,
+        hist: histLast,
+        atr,
+        volatility
+      };
+    }
+
+    function getTradingDecision(signal) {
+      const { buyConfidence, sellConfidence } = signal;
+      const threshold = 65; // Umbral mínimo para operar (65%)
+
+      let action = 'Neutral';
+      let confidence = Math.max(buyConfidence, sellConfidence);
+      let reason = '';
+
+      if (buyConfidence >= threshold && buyConfidence > sellConfidence + 15) {
+        action = 'Compra';
+        confidence = buyConfidence;
+        reason = `RSI:${signal.rsi.toFixed(1)} Stoch:${signal.stochK.toFixed(1)} MACD:${signal.hist.toFixed(4)}`;
+      } else if (sellConfidence >= threshold && sellConfidence > buyConfidence + 15) {
+        action = 'Venta';
+        confidence = sellConfidence;
+        reason = `RSI:${signal.rsi.toFixed(1)} Stoch:${signal.stochK.toFixed(1)} MACD:${signal.hist.toFixed(4)}`;
+      }
+
+      return { action, confidence, reason };
+    }
+
     // === AutoTuner de Duración Adaptativa por Estado de Mercado ===
     let durationStats = {};
     try {
@@ -1504,78 +1606,28 @@
             if (strength > 100) strength = 100;
 
           } else {
-            // --- Sistema de Puntuación Ponderada de mejoras.txt ---
-            let buyScore = 0;
-            let sellScore = 0;
+            // --- Sistema Cuantitativo de 6 Indicadores Ponderados ---
+            const weightedSig = calculateWeightedSignal(candles);
+            const decision = getTradingDecision(weightedSig);
 
-            // 1. RSI (30% peso)
-            let rsiZoneExtrem = false;
-            if (rsiLast < 30) { buyScore += 30; rsiZoneExtrem = true; }
-            else if (rsiLast < 40) { buyScore += 18; }
-            else if (rsiLast > 70) { sellScore += 30; rsiZoneExtrem = true; }
-            else if (rsiLast > 60) { sellScore += 18; }
+            side = decision.action;
+            strength = decision.confidence;
 
-            // 2. Estocástico (25% peso)
-            const stoch = stochastic(candles, 14, 3, 3);
-            const stochK = stoch.k.at(-1) ?? 50;
-            const stochD = stoch.d.at(-1) ?? 50;
-            if (stochK < 25 && stochK > stochD) buyScore += 25;
-            else if (stochK > 75 && stochK < stochD) sellScore += 25;
-            else if (stochK > stochD) buyScore += 12;
-            else if (stochK < stochD) sellScore += 12;
-
-            // 3. MACD Histograma (25% peso)
-            const prevHist = hist.at(-2) ?? 0;
-            if (histLast > 0) {
-              buyScore += 20;
-              if (histLast > prevHist) buyScore += 5;
-            } else if (histLast < 0) {
-              sellScore += 20;
-              if (histLast < prevHist) sellScore += 5;
-            }
-
-            // 4. Tendencia EMA (20% peso)
-            if (trendUp) buyScore += 20;
-            else sellScore += 20;
-
-            // 5. Divergencia & Patrón de Velas (+15% Bonus de Alta Confianza)
-            const rsiArrAll = rsi(closes, 14);
-            const div = detectDivergence(candles, rsiArrAll);
-            if (div) {
-              if (div.type === 'BULLISH') buyScore += div.bonus;
-              else if (div.type === 'BEARISH') sellScore += div.bonus;
-            }
-
-            const candlePattern = checkCandlePattern(candles);
-            if (candlePattern) {
-              if (candlePattern.type === 'BULLISH') buyScore += candlePattern.bonus;
-              else if (candlePattern.type === 'BEARISH') sellScore += candlePattern.bonus;
-            }
-
-            // Normalización de Scores y Determinación de Señal
-            const totalBuy = Math.min(100, Math.round(buyScore));
-            const totalSell = Math.min(100, Math.round(sellScore));
-
-            const minConfidence = 60;
-            if (totalBuy >= minConfidence && totalBuy > totalSell + 5) {
-              side = "Compra";
-              strength = totalBuy;
-            } else if (totalSell >= minConfidence && totalSell > totalBuy + 5) {
-              side = "Venta";
-              strength = totalSell;
-            } else {
-              side = "Neutral";
-              strength = Math.max(totalBuy, totalSell);
-            }
+            const totalBuy = weightedSig.buyConfidence;
+            const totalSell = weightedSig.sellConfidence;
 
             // Actualizar Desglose de Score y Checklist en UI
             if (elBuyScoreText) elBuyScoreText.textContent = `${totalBuy}%`;
             if (elSellScoreText) elSellScoreText.textContent = `${totalSell}%`;
-            const sumScore = (totalBuy + totalSell) || 1;
-            if (elBuyScoreBar) elBuyScoreBar.style.width = `${Math.round((totalBuy / sumScore) * 100)}%`;
-            if (elSellScoreBar) elSellScoreBar.style.width = `${Math.round((totalSell / sumScore) * 100)}%`;
+            if (elBuyScoreBar) elBuyScoreBar.style.width = `${totalBuy}%`;
+            if (elSellScoreBar) elSellScoreBar.style.width = `${totalSell}%`;
 
-            if (chkRsi) chkRsi.innerHTML = rsiZoneExtrem ? '<span class="text-emerald-400">✅</span> RSI Extremo' : '<span class="text-rose-400">❌</span> RSI Extremo';
+            const rsiExtrem = weightedSig.rsi < 35 || weightedSig.rsi > 65;
+            const rsiArrAll = rsi(closes, 14);
+            const div = detectDivergence(candles, rsiArrAll);
+            const candlePattern = checkCandlePattern(candles);
+
+            if (chkRsi) chkRsi.innerHTML = rsiExtrem ? '<span class="text-emerald-400">✅</span> RSI Extremo' : '<span class="text-rose-400">❌</span> RSI Extremo';
             if (chkDiv) chkDiv.innerHTML = div ? `<span class="text-emerald-400">✅</span> ${div.name}` : '<span class="text-rose-400">❌</span> Divergencia';
             if (chkCandle) chkCandle.innerHTML = candlePattern ? `<span class="text-emerald-400">✅</span> ${candlePattern.name}` : '<span class="text-rose-400">❌</span> Patrón Velas';
             if (chkTrend) chkTrend.innerHTML = ((side === "Compra" && trendUp) || (side === "Venta" && !trendUp)) ? '<span class="text-emerald-400">✅</span> Tendencia' : '<span class="text-rose-400">❌</span> Tendencia';
