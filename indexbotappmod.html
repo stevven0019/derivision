@@ -272,32 +272,59 @@
           <!-- Live Signals Panel -->
           <div class="glass-panel rounded-2xl p-5 space-y-3">
             <h3 class="text-sm font-bold text-indigo-400 uppercase tracking-wider">Métricas e Indicadores</h3>
-            <div class="grid grid-cols-2 gap-3 text-xs">
-              <div class="bg-black/30 p-2.5 rounded-xl border border-white/5">
-                <p class="text-gray-500 font-semibold mb-0.5">Último Precio</p>
-                <p id="last_price" class="text-sm font-bold font-mono text-gray-200">—</p>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-black/30 p-2 rounded-xl border border-white/5">
+                <p class="text-gray-500 font-semibold mb-0.5 text-[10px]">Último Precio</p>
+                <p id="last_price" class="text-xs font-bold font-mono text-gray-200">—</p>
               </div>
-              <div class="bg-black/30 p-2.5 rounded-xl border border-white/5">
-                <p class="text-gray-500 font-semibold mb-0.5">RSI (Período)</p>
-                <p id="rsi_val" class="text-sm font-bold font-mono text-gray-200">—</p>
+              <div class="bg-black/30 p-2 rounded-xl border border-white/5">
+                <p class="text-gray-500 font-semibold mb-0.5 text-[10px]">RSI (Período)</p>
+                <p id="rsi_val" class="text-xs font-bold font-mono text-gray-200">—</p>
               </div>
-              <div class="col-span-2 bg-black/30 p-2.5 rounded-xl border border-white/5">
-                <p class="text-gray-500 font-semibold mb-0.5">MACD (Fast/Slow/Sig)</p>
-                <p id="macd_vals" class="text-xs font-bold font-mono text-gray-300">—</p>
+              <div class="col-span-2 bg-black/30 p-2 rounded-xl border border-white/5">
+                <p class="text-gray-500 font-semibold mb-0.5 text-[10px]">MACD (Fast/Slow/Sig)</p>
+                <p id="macd_vals" class="text-[11px] font-bold font-mono text-gray-300">—</p>
               </div>
-              <div class="col-span-2 bg-black/30 p-2.5 rounded-xl border border-white/5">
-                <p class="text-gray-500 font-semibold mb-0.5">Tendencia EMA</p>
-                <p id="trend_dir" class="text-xs font-bold text-gray-300">—</p>
+              <div class="bg-black/30 p-2 rounded-xl border border-white/5">
+                <p class="text-gray-500 font-semibold mb-0.5 text-[10px]">Tendencia EMA</p>
+                <p id="trend_dir" class="text-[11px] font-bold text-gray-300">—</p>
+              </div>
+              <div class="bg-black/30 p-2 rounded-xl border border-white/5">
+                <p class="text-gray-500 font-semibold mb-0.5 text-[10px]">Volatilidad (ATR)</p>
+                <p id="atr_val" class="text-[11px] font-bold font-mono text-gray-300">—</p>
+              </div>
+            </div>
+
+            <!-- Score Ponderado: Compra vs Venta -->
+            <div class="bg-black/40 border border-white/5 rounded-xl p-2.5 space-y-1.5 text-xs">
+              <div class="flex justify-between text-[10px] font-bold">
+                <span class="text-emerald-400">COMPRA: <span id="buy_score_text">0%</span></span>
+                <span class="text-rose-400">VENTA: <span id="sell_score_text">0%</span></span>
+              </div>
+              <div class="w-full bg-black/60 rounded-full h-2 flex overflow-hidden border border-white/5">
+                <div id="buy_score_bar" class="bg-emerald-500 h-full transition-all duration-300" style="width: 50%"></div>
+                <div id="sell_score_bar" class="bg-rose-500 h-full transition-all duration-300" style="width: 50%"></div>
+              </div>
+            </div>
+
+            <!-- Checklist de Condiciones de Entrada -->
+            <div class="bg-black/30 border border-white/5 rounded-xl p-2.5 space-y-1 text-[11px]">
+              <p class="text-gray-400 font-bold text-[9px] uppercase tracking-wider mb-1">Condiciones de Entrada</p>
+              <div class="grid grid-cols-2 gap-1 text-gray-300 text-[10px]">
+                <div id="chk_rsi" class="flex items-center gap-1"><span class="text-rose-400">❌</span> RSI Extremo</div>
+                <div id="chk_div" class="flex items-center gap-1"><span class="text-rose-400">❌</span> Divergencia</div>
+                <div id="chk_candle" class="flex items-center gap-1"><span class="text-rose-400">❌</span> Patrón Velas</div>
+                <div id="chk_trend" class="flex items-center gap-1"><span class="text-rose-400">❌</span> Tendencia</div>
               </div>
             </div>
             
-            <div class="bg-indigo-950/20 border border-indigo-900/30 rounded-xl p-3.5 flex items-center justify-between">
+            <div class="bg-indigo-950/20 border border-indigo-900/30 rounded-xl p-3 flex items-center justify-between">
               <div>
                 <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Señal Combinada</p>
                 <div id="signal_badge" class="mt-1"><span class="px-3 py-0.5 rounded-full text-xs font-bold bg-white/5 text-gray-400">Neutral</span></div>
               </div>
               <div class="text-right">
-                <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Fuerza</p>
+                <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Confianza</p>
                 <p id="signal_strength_text" class="text-base font-bold font-mono text-white mt-0.5">0%</p>
               </div>
             </div>
@@ -655,6 +682,82 @@
       return { k: smoothK, d: smoothD };
     }
 
+    // === Mejoras de Métricas Avanzadas (ATR, Divergencias, Patrones de Velas) ===
+    function calculateATR(candlesList, period = 14) {
+      if (!candlesList || candlesList.length < period + 1) return 0;
+      let trSum = 0;
+      for (let i = 1; i <= period; i++) {
+        const c = candlesList[i];
+        const prevC = candlesList[i - 1];
+        const tr = Math.max(
+          c.high - c.low,
+          Math.abs(c.high - prevC.close),
+          Math.abs(c.low - prevC.close)
+        );
+        trSum += tr;
+      }
+      let atr = trSum / period;
+      for (let i = period + 1; i < candlesList.length; i++) {
+        const c = candlesList[i];
+        const prevC = candlesList[i - 1];
+        const tr = Math.max(
+          c.high - c.low,
+          Math.abs(c.high - prevC.close),
+          Math.abs(c.low - prevC.close)
+        );
+        atr = (atr * (period - 1) + tr) / period;
+      }
+      return atr;
+    }
+
+    function detectDivergence(candlesList, rsiValues) {
+      if (!candlesList || candlesList.length < 20 || !rsiValues || rsiValues.length < 20) return null;
+      const len = candlesList.length;
+      const currentPrice = candlesList[len - 1].close;
+      const prevPrice = candlesList[len - 10].close;
+      const currentRsi = rsiValues[len - 1];
+      const prevRsi = rsiValues[len - 10];
+      if (!isFinite(currentRsi) || !isFinite(prevRsi)) return null;
+
+      if (currentPrice < prevPrice && currentRsi > prevRsi + 2) {
+        return { type: 'BULLISH', name: 'Divergencia Alcista', bonus: 15 };
+      }
+      if (currentPrice > prevPrice && currentRsi < prevRsi - 2) {
+        return { type: 'BEARISH', name: 'Divergencia Bajista', bonus: 15 };
+      }
+      return null;
+    }
+
+    function checkCandlePattern(candlesList) {
+      if (!candlesList || candlesList.length < 2) return null;
+      const last = candlesList.at(-1);
+      const prev = candlesList.at(-2);
+      if (!last || !prev) return null;
+
+      const body = Math.abs(last.close - last.open);
+      const range = last.high - last.low || 1;
+      const lowerWick = Math.min(last.open, last.close) - last.low;
+      const upperWick = last.high - Math.max(last.open, last.close);
+
+      // Martillo (Hammer)
+      if (lowerWick >= body * 1.8 && upperWick <= body * 0.5 && last.close > last.open) {
+        return { type: 'BULLISH', name: 'Martillo Alcista', bonus: 15 };
+      }
+      // Estrella Fugaz (Shooting Star)
+      if (upperWick >= body * 1.8 && lowerWick <= body * 0.5 && last.close < last.open) {
+        return { type: 'BEARISH', name: 'Estrella Fugaz', bonus: 15 };
+      }
+      // Envolvente Alcista
+      if (prev.close < prev.open && last.close > last.open && last.close > prev.open && last.open < prev.close) {
+        return { type: 'BULLISH', name: 'Envolvente Alcista', bonus: 15 };
+      }
+      // Envolvente Bajista
+      if (prev.close > prev.open && last.close < last.open && last.close < prev.open && last.open > prev.close) {
+        return { type: 'BEARISH', name: 'Envolvente Bajista', bonus: 15 };
+      }
+      return null;
+    }
+
     // === Estado y elementos UI ===
     let ws = null;
     let candles = [];
@@ -683,6 +786,15 @@
     const elRsiVal = document.getElementById("rsi_val");
     const elMacdVals = document.getElementById("macd_vals");
     const elTrendDir = document.getElementById("trend_dir");
+    const elAtrVal = document.getElementById("atr_val");
+    const elBuyScoreText = document.getElementById("buy_score_text");
+    const elSellScoreText = document.getElementById("sell_score_text");
+    const elBuyScoreBar = document.getElementById("buy_score_bar");
+    const elSellScoreBar = document.getElementById("sell_score_bar");
+    const chkRsi = document.getElementById("chk_rsi");
+    const chkDiv = document.getElementById("chk_div");
+    const chkCandle = document.getElementById("chk_candle");
+    const chkTrend = document.getElementById("chk_trend");
     const elSignal = document.getElementById("signal_badge");
     const elSignalStrength = document.getElementById("signal_strength");
     const elSignalStrengthText = document.getElementById("signal_strength_text");
@@ -1264,35 +1376,106 @@
         const trendUp = lastClose > emaTrend;
         trendLabel = `${trendUp ? "Alcista" : "Bajista"} (EMA ${trP}: ${emaTrend.toFixed(5)})`;
 
+        const atrVal = calculateATR(candles, 14);
+        const atrPercent = lastClose ? ((atrVal / lastClose) * 100) : 0;
+        let atrState = "Normal ⚡";
+        if (atrPercent < 0.5) atrState = "Baja 💤";
+        else if (atrPercent > 2.0) atrState = "Alta 💥";
+        if (elAtrVal) elAtrVal.textContent = `${atrPercent.toFixed(2)}% (${atrState})`;
+
         const strategyType = elStrategyType?.value;
 
         if (strategyType === "rise_fall") {
-          let buyConditionsMet = 0;
-          let sellConditionsMet = 0;
-
-          // Tendencia principal
-          if (trendUp) buyConditionsMet++; else sellConditionsMet++;
-
-          // Histograma MACD
-          if (histLast > 0) buyConditionsMet++; else sellConditionsMet++;
-
-          // Cruce EMAs rápidas 9/21
-          if (emaFast > emaSlow) buyConditionsMet++; else sellConditionsMet++;
-
-          // Bandas de Bollinger como soporte/resistencia
-          if (lastClose <= bbLower) buyConditionsMet++;
-          if (lastClose >= bbUpper) sellConditionsMet++;
-
           if (isSpecialIndicatorActive) {
+            // Scalping Intenso (Intacto)
+            let buyConditionsMet = 0;
+            let sellConditionsMet = 0;
             if (histLast > 0 && rsiLast > 55) buyConditionsMet = 4; else buyConditionsMet = 0;
             if (histLast < 0 && rsiLast < 45) sellConditionsMet = 4; else sellConditionsMet = 0;
+
+            if (buyConditionsMet >= 3) side = "Compra";
+            else if (sellConditionsMet >= 3) side = "Venta";
+
+            strength = Math.round(100 * Math.max(buyConditionsMet, sellConditionsMet) / 4);
+            if (strength > 100) strength = 100;
+
+          } else {
+            // --- Sistema de Puntuación Ponderada de mejoras.txt ---
+            let buyScore = 0;
+            let sellScore = 0;
+
+            // 1. RSI (30% peso)
+            let rsiZoneExtrem = false;
+            if (rsiLast < 30) { buyScore += 30; rsiZoneExtrem = true; }
+            else if (rsiLast < 40) { buyScore += 18; }
+            else if (rsiLast > 70) { sellScore += 30; rsiZoneExtrem = true; }
+            else if (rsiLast > 60) { sellScore += 18; }
+
+            // 2. Estocástico (25% peso)
+            const stoch = stochastic(candles, 14, 3, 3);
+            const stochK = stoch.k.at(-1) ?? 50;
+            const stochD = stoch.d.at(-1) ?? 50;
+            if (stochK < 25 && stochK > stochD) buyScore += 25;
+            else if (stochK > 75 && stochK < stochD) sellScore += 25;
+            else if (stochK > stochD) buyScore += 12;
+            else if (stochK < stochD) sellScore += 12;
+
+            // 3. MACD Histograma (25% peso)
+            const prevHist = hist.at(-2) ?? 0;
+            if (histLast > 0) {
+              buyScore += 20;
+              if (histLast > prevHist) buyScore += 5;
+            } else if (histLast < 0) {
+              sellScore += 20;
+              if (histLast < prevHist) sellScore += 5;
+            }
+
+            // 4. Tendencia EMA (20% peso)
+            if (trendUp) buyScore += 20;
+            else sellScore += 20;
+
+            // 5. Divergencia & Patrón de Velas (+15% Bonus de Alta Confianza)
+            const rsiArrAll = rsi(closes, 14);
+            const div = detectDivergence(candles, rsiArrAll);
+            if (div) {
+              if (div.type === 'BULLISH') buyScore += div.bonus;
+              else if (div.type === 'BEARISH') sellScore += div.bonus;
+            }
+
+            const candlePattern = checkCandlePattern(candles);
+            if (candlePattern) {
+              if (candlePattern.type === 'BULLISH') buyScore += candlePattern.bonus;
+              else if (candlePattern.type === 'BEARISH') sellScore += candlePattern.bonus;
+            }
+
+            // Normalización de Scores y Determinación de Señal
+            const totalBuy = Math.min(100, Math.round(buyScore));
+            const totalSell = Math.min(100, Math.round(sellScore));
+
+            const minConfidence = 60;
+            if (totalBuy >= minConfidence && totalBuy > totalSell + 5) {
+              side = "Compra";
+              strength = totalBuy;
+            } else if (totalSell >= minConfidence && totalSell > totalBuy + 5) {
+              side = "Venta";
+              strength = totalSell;
+            } else {
+              side = "Neutral";
+              strength = Math.max(totalBuy, totalSell);
+            }
+
+            // Actualizar Desglose de Score y Checklist en UI
+            if (elBuyScoreText) elBuyScoreText.textContent = `${totalBuy}%`;
+            if (elSellScoreText) elSellScoreText.textContent = `${totalSell}%`;
+            const sumScore = (totalBuy + totalSell) || 1;
+            if (elBuyScoreBar) elBuyScoreBar.style.width = `${Math.round((totalBuy / sumScore) * 100)}%`;
+            if (elSellScoreBar) elSellScoreBar.style.width = `${Math.round((totalSell / sumScore) * 100)}%`;
+
+            if (chkRsi) chkRsi.innerHTML = rsiZoneExtrem ? '<span class="text-emerald-400">✅</span> RSI Extremo' : '<span class="text-rose-400">❌</span> RSI Extremo';
+            if (chkDiv) chkDiv.innerHTML = div ? `<span class="text-emerald-400">✅</span> ${div.name}` : '<span class="text-rose-400">❌</span> Divergencia';
+            if (chkCandle) chkCandle.innerHTML = candlePattern ? `<span class="text-emerald-400">✅</span> ${candlePattern.name}` : '<span class="text-rose-400">❌</span> Patrón Velas';
+            if (chkTrend) chkTrend.innerHTML = ((side === "Compra" && trendUp) || (side === "Venta" && !trendUp)) ? '<span class="text-emerald-400">✅</span> Tendencia' : '<span class="text-rose-400">❌</span> Tendencia';
           }
-
-          if (buyConditionsMet >= 3) side = "Compra";
-          else if (sellConditionsMet >= 3) side = "Venta";
-
-          strength = Math.round(100 * Math.max(buyConditionsMet, sellConditionsMet) / 4);
-          if (strength > 100) strength = 100;
 
         } else if (strategyType === "over_under_digit") {
           const digit = lastClose.toFixed(5).slice(-1);
